@@ -78,7 +78,6 @@ def run():
 
             expired = execu.expire_unfilled_orders(str(bar_id))
             for oid, expired_pair in expired:
-                send_alert(f"{expired_pair} ORDER EXPIRED", f"Order {oid} expired", priority=1)
                 logger.warning("Order %s for %s expired", oid, expired_pair)
 
             db.insert_decision(
@@ -103,18 +102,6 @@ def run():
             if sig == "HOLD" or bar_time is None:
                 logger.info("No action for %s on bar %s", pair, bar_id)
                 continue
-
-            if sig in ("BUY", "SELL") and conf >= 0.7 and price:
-                send_alert(
-                    f"{pair} {sig}",
-                    f"Signal {sig} @ {price:.2f}, conf={conf:.2f}, ATR%={result['atr_pct']:.4f}",
-                )
-                logger.info(
-                    "%s alert sent (price=%s, atr%%=%.4f)",
-                    sig,
-                    f"{price:.2f}",
-                    result.get("atr_pct", 0),
-                )
 
             if execu.already_ordered_this_bar(bar_id):
                 logger.info("Order already placed for %s; skipping new order", bar_id)
