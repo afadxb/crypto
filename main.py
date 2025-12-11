@@ -107,7 +107,7 @@ def run():
 
         if next_bar_closes:
             next_bar_close = min(next_bar_closes)
-            sleep_seconds = max(10, (next_bar_close - pd.Timestamp.utcnow()).total_seconds())
+            sleep_seconds = max(10, (next_bar_close - pd.Timestamp.now(tz="UTC")).total_seconds())
             time.sleep(sleep_seconds)
         else:
             time.sleep(CFG.TRADING_PARAMS["trading_interval"])
