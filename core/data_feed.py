@@ -19,6 +19,7 @@ class DataFeed:
         self.api = API(api_key, api_secret)
         self.cache = MarketCache()
         self.interval = interval  # minutes, Kraken-style
+        self.last_time = {}
 
     def _should_use_cache(self, pair: str) -> bool:
         cached = self.cache.get(pair)
@@ -34,19 +35,36 @@ class DataFeed:
             # enforce 1h timeframe
             interval = 60
 
-        if self._should_use_cache(pair):
-            return self.cache.get(pair)
+        cached = self.cache.get(pair)
+        if self._should_use_cache(pair) and cached is not None:
+            return cached
 
-        since = int(time.time()) - interval * 60 * MIN_CANDLES
+        if cached is None:
+            since = int(time.time()) - interval * 60 * MIN_CANDLES
+        else:
+            last_ts = int(cached["time"].iloc[-1].timestamp())
+            since = last_ts
+
         resp = self.api.query_public("OHLC", {"pair": pair, "interval": interval, "since": since})
 
         key = next(k for k in resp["result"].keys() if k != "last")
         raw = resp["result"][key]
 
-        df = pd.DataFrame(raw, columns=[
-            "time", "open", "high", "low", "close", "vwap", "volume", "count"
-        ], dtype=float)
-        df["time"] = pd.to_datetime(df["time"], unit="s")
+        df_new = pd.DataFrame(
+            raw,
+            columns=["time", "open", "high", "low", "close", "vwap", "volume", "count"],
+            dtype=float,
+        )
+        df_new["time"] = pd.to_datetime(df_new["time"], unit="s")
+
+        if cached is not None:
+            df = pd.concat([cached, df_new], ignore_index=True)
+            df = df.drop_duplicates(subset="time", keep="last").sort_values("time").reset_index(drop=True)
+        else:
+            df = df_new
+
+        if not df.empty:
+            self.last_time[pair] = df["time"].iloc[-1]
 
         self.cache.set(pair, df)
         return df

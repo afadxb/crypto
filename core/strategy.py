@@ -1,5 +1,5 @@
 """Pure strategy logic for the Kraken bot."""
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
 from .indicators import ema, atr_wilder, supertrend
 
@@ -10,7 +10,7 @@ BASE_CONFIDENCE = 0.6
 HIGH_CONFIDENCE = 0.8
 
 
-def analyze(df, cfg: Dict[str, Any]) -> Dict[str, Any]:
+def analyze(df, cfg: Dict[str, Any], last_signal: Optional[str] = None) -> Dict[str, Any]:
     """Analyze market data and return a trading decision.
 
     Notes
@@ -52,6 +52,8 @@ def analyze(df, cfg: Dict[str, Any]) -> Dict[str, Any]:
         result.update({"signal": "HOLD", "confidence": LOW_CONFIDENCE})
         return result
 
+    ema_gap_pct = abs(ema_fast_val - ema_slow_val) / price if price else 0
+
     is_bullish = st_dir == "bull" and price > st_val and ema_fast_val > ema_slow_val
     is_bearish = st_dir == "bear" and price < st_val and ema_fast_val < ema_slow_val
 
@@ -69,5 +71,12 @@ def analyze(df, cfg: Dict[str, Any]) -> Dict[str, Any]:
     if signal in {"BUY", "SELL"} and atr_pct >= 2 * cfg["atr_volatility_min_pct"] and ema_separation >= EMA_SEPARATION_THRESHOLD:
         confidence = HIGH_CONFIDENCE
 
-    result.update({"signal": signal, "confidence": confidence})
+    if signal == "BUY" and last_signal == "SELL" and ema_gap_pct < cfg.get("ema_gap_entry_pct", 0):
+        signal = "HOLD"
+        confidence = min(confidence, 0.4)
+    elif signal == "SELL" and last_signal == "BUY" and ema_gap_pct < cfg.get("ema_gap_entry_pct", 0):
+        signal = "HOLD"
+        confidence = min(confidence, 0.4)
+
+    result.update({"signal": signal, "confidence": confidence, "ema_gap_pct": ema_gap_pct})
     return result
