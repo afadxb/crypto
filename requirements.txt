@@ -1,0 +1,5 @@
+krakenex
+pandas
+python-dotenv
+requests
+tabulate

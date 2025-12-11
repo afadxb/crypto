@@ -55,7 +55,8 @@ class DataFeed:
             columns=["time", "open", "high", "low", "close", "vwap", "volume", "count"],
             dtype=float,
         )
-        df_new["time"] = pd.to_datetime(df_new["time"], unit="s")
+        # Normalize to timezone-aware UTC timestamps to avoid mixing aware/naive datetimes
+        df_new["time"] = pd.to_datetime(df_new["time"], unit="s", utc=True)
 
         if cached is not None:
             df = pd.concat([cached, df_new], ignore_index=True)
