@@ -1,0 +1,93 @@
+
+Keep it extremely simple:
+Supertrend + EMAs + ATR, 1h timeframe, clean risk rules.
+
+- 1-hour timeframe
+- Signals evaluated strictly on closed candles (bar close), not intra-candle
+
+- Use Kraken OHLC interval = 60 minutes.
+- Where OHLC is fetched (get_ohlc_data), ensure:
+  - Default interval argument is 60, not 5.
+  - Enough history is requested to compute all indicators (at least 200 candles).
+
+- TRADING_PARAMS:
+  - Set 'trading_interval' to 3600 (seconds) for the main loop sleep.
+- The trading cycle must use **closed** candles:
+  - For indicator calculations and signal decision, use the **previous completed candle**, not a partially forming one.
+  - Practically: when working with the OHLC DataFrame, use `iloc[-2]` as the signal candle where appropriate.
+  - Use the final close of that candle as the reference for indicators and signals.
+
+Indicators:
+- 'ema_fast': 9
+- 'ema_slow': 21
+- 'atr_period': 14
+- 'atr_volatility_min_pct': 0.003   # 0.3% of price as a minimum ATR filter
+- 'supertrend_period': 10
+- 'supertrend_multiplier': 3.0
+
+Implement standard Wilder ATR will be used to:
+Compute volatility percentage: atr / close
+Filter out low-volatility, choppy periods.
+
+Implement a Supertrend function that returns:
+- A Supertrend Series (band values)
+- A "direction" Series (+1 for bullish, -1 for bearish) or a boolean Series (True for bullish, False for bearish).
+You can use standard Supertrend logic:
+- Use ATR-based bands with supertrend_period and supertrend_multiplier.
+- Price above band => bullish; price below band => bearish.
+- Supertrend should not repaint; use the recursive logic so bands "flip" when price closes across.
+- Use 'high', 'low', 'close' columns from the OHLC DataFrame.
+
+analyze_market decision engine based on:
+- Supertrend direction
+- EMA fast vs EMA slow
+- ATR percentage vs minimum threshold
+
+Behavior:
+Fetch OHLC with interval=60 (or from config value).
+Compute:
+- ema_fast_series = EMA(close, ema_fast)
+- ema_slow_series = EMA(close, ema_slow)
+- atr_series = ATR(atr_period)
+- supertrend, direction = Supertrend(supertrend_period, supertrend_multiplier)
+
+Use the second-to-last candle (index -2) for signals:
+- price = data["close"].iloc[-2]
+- st_dir = direction.iloc[-2]
+- st_value = supertrend.iloc[-2]
+- ema_fast_val = ema_fast_series.iloc[-2]
+- ema_slow_val = ema_slow_series.iloc[-2]
+- atr_val = atr_series.iloc[-2]
+
+Compute atr_pct = atr_val / price and compare with atr_volatility_min_pct from config.
+
+Conditions:
+BUY signal:
+- st_dir is bullish (e.g., +1) AND
+- price > st_value AND
+- ema_fast_val > ema_slow_val AND
+- atr_pct >= atr_volatility_min_pct
+
+SELL signal:
+- st_dir is bearish (e.g., -1) AND
+- price < st_value AND
+- ema_fast_val < ema_slow_val AND
+- atr_pct >= atr_volatility_min_pct
+If conditions are not met: signal = "HOLD".
+
+Confidence:
+Base confidence 0.6 when all conditions met.
+You may increase to ~0.8 if:
+- ATR is significantly higher than the minimum (e.g., atr_pct >= 2 * atr_volatility_min_pct)
+- AND EMAs are strongly separated (abs(ema_fast_val - ema_slow_val) / price above some small threshold).
+  
+Prefer small, clear helper methods over long inline logic blocks.
+
+When printing "TRADING SIGNALS", display:
+The new signal (BUY/SELL/HOLD)
+Confidence
+Supertrend direction
+EMA fast vs EMA slow
+ATR % (rounded nicely)
+Example line:
+BTC: 🟢 BUY (Conf: 78%) | ST: bull | EMA9>EMA21 | ATR: 0.65%
