@@ -1,52 +1,117 @@
+"""Main loop for Kraken trading bot."""
 import os
 import time
-from dotenv import load_dotenv
 from datetime import datetime
 
-from core.data_feed import DataFeed
-from core.strategy import analyze
-from core.execution import Execution
-from core.db import DB
-from core.alerts import send_alert
+from dotenv import load_dotenv
 from krakenex import API
+
+import pandas as pd
+
 import config as CFG
+from core.alerts import send_alert
+from core.data_feed import DataFeed
+from core.db import DB
+from core.execution import Execution
+from core.strategy import analyze
 
 load_dotenv()
 
 api = API(os.getenv("KRAKEN_API_KEY"), os.getenv("KRAKEN_API_SECRET"))
-db = DB(os.getenv("DB_PATH"))
-feed = DataFeed(os.getenv("KRAKEN_API_KEY"), os.getenv("KRAKEN_API_SECRET"))
+db = DB(CFG.DB_PATH)
+feed = DataFeed(os.getenv("KRAKEN_API_KEY"), os.getenv("KRAKEN_API_SECRET"), CFG.TRADING_PARAMS["ohlc_interval"])
 execu = Execution(db, api, CFG)
 
+
+def load_last_processed_bar(db: DB):
+    q = "SELECT pair, bar_id FROM decisions ORDER BY timestamp DESC"
+    seen = {}
+    for pair, bar_id in db.conn.execute(q):
+        if pair not in seen:
+            seen[pair] = bar_id
+    return seen
+
+
 def run():
+    last_processed_bar = load_last_processed_bar(db)
     while True:
+        next_bar_closes = []
         for pair in CFG.PAIRS:
-            df = feed.fetch_ohlc(pair, interval=60)
-            result = analyze(df, CFG.INDICATORS)
+            df = feed.fetch_ohlc(pair, interval=CFG.TRADING_PARAMS["ohlc_interval"])
+            if len(df) < 2:
+                continue
+
+            bar_time = df["time"].iloc[-2]
+            bar_open_unix = int(bar_time.timestamp())
+            bar_id = f"{pair}-60-{bar_open_unix}"
+            next_bar_closes.append(bar_time + pd.Timedelta(hours=1))
+
+            if last_processed_bar.get(pair) == bar_id:
+                continue
+
+            last_sig = db.last_signal(pair)
+            result = analyze(df, CFG.INDICATORS, last_sig)
 
             sig = result["signal"]
-            conf = result["confidence"]
-            bar_time = result["bar_time"]
-            price = result["price"]
+            conf = result.get("confidence", 0)
+            price = result.get("price")
 
-            db.insert_decision((
-                datetime.utcnow(), pair, sig, conf, price,
-                result["st_dir"], result["ema_fast"], result["ema_slow"],
-                result["atr"], result["atr_pct"], str(bar_time)
-            ))
+            expired = execu.expire_unfilled_orders(str(bar_id))
+            for oid, expired_pair in expired:
+                send_alert(f"{expired_pair} ORDER EXPIRED", f"Order {oid} expired", priority=1)
 
-            if sig == "HOLD": 
+            db.insert_decision(
+                (
+                    datetime.utcnow(),
+                    pair,
+                    sig,
+                    conf,
+                    price,
+                    result.get("st_dir"),
+                    result.get("ema_fast"),
+                    result.get("ema_slow"),
+                    result.get("atr"),
+                    result.get("atr_pct"),
+                    str(bar_time),
+                    str(bar_id),
+                )
+            )
+
+            last_processed_bar[pair] = bar_id
+
+            if sig == "HOLD" or bar_time is None:
                 continue
 
-            if execu.already_ordered_this_bar(pair, bar_time):
+            if sig in ("BUY", "SELL") and conf >= 0.7 and price:
+                send_alert(
+                    f"{pair} {sig}",
+                    f"Signal {sig} @ {price:.2f}, conf={conf:.2f}, ATR%={result['atr_pct']:.4f}",
+                )
+
+            if execu.already_ordered_this_bar(bar_id):
                 continue
 
-            size = CFG.position_size_usd / price
+            size = CFG.TRADING_PARAMS["position_size_usd"] / price if price else 0
 
-            status = execu.place_limit(pair, sig, price, size, bar_time)
-            send_alert(f"{pair} {sig}", f"Limit {sig} @ {price} (conf={conf})")
+            slippage = CFG.TRADING_PARAMS.get("limit_slippage_pct", 0)
+            limit_price = price * (1 - slippage) if sig.upper() == "BUY" else price * (1 + slippage)
 
-        time.sleep(3600)
+            status = execu.place_limit(pair, sig, price, size, bar_time, bar_id)
+            if status == "SUBMITTED":
+                send_alert(
+                    f"{pair} {sig} ORDER",
+                    f"Limit {sig} @ {limit_price:.2f}, size={size:.4f}",
+                )
+            elif status == "ERROR":
+                send_alert(f"{pair} ORDER ERROR", "See logs / DB for details", priority=1)
+
+        if next_bar_closes:
+            next_bar_close = min(next_bar_closes)
+            sleep_seconds = max(10, (next_bar_close - pd.Timestamp.utcnow()).total_seconds())
+            time.sleep(sleep_seconds)
+        else:
+            time.sleep(CFG.TRADING_PARAMS["trading_interval"])
+
 
 if __name__ == "__main__":
     run()
