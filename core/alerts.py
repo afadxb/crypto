@@ -5,7 +5,7 @@ from typing import Optional
 import requests
 
 
-def send_alert(title: str, message: str) -> Optional[requests.Response]:
+def send_alert(title: str, message: str, priority: int = 0) -> Optional[requests.Response]:
     user = os.getenv("PUSHOVER_USER_KEY")
     token = os.getenv("PUSHOVER_API_TOKEN")
     if not user or not token:
@@ -18,7 +18,7 @@ def send_alert(title: str, message: str) -> Optional[requests.Response]:
             "user": user,
             "title": title,
             "message": message,
-            "priority": 0,
+            "priority": priority,
         },
         timeout=10,
     )
