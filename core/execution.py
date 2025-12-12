@@ -12,6 +12,7 @@ class Execution:
         self.db = db
         self.api = api
         self.cfg = cfg
+        self.local_tz = cfg.LOCAL_TZ
 
     def _latest_price(self, pair: str, fallback: float) -> float:
         row = self.db.conn.execute(
@@ -32,18 +33,21 @@ class Execution:
     def current_total_exposure(self, price_lookup):
         total = 0.0
         q = "SELECT pair, side, size FROM positions WHERE side IS NOT NULL"
-        for pair, _, size in self.db.conn.execute(q):
+        for pair, side, size in self.db.conn.execute(q):
+            if side != "LONG":
+                continue
             p = price_lookup(pair)
             if p:
-                total += abs(size * p)
+                total += max(size, 0) * p
         return total
 
     def _pair_exposure(self, pair: str, price_lookup):
         position = self.db.get_position(pair)
-        if not position or not position.get("side"):
+        if not position or position.get("side") != "LONG":
             return 0.0
         price = price_lookup(pair)
-        return abs(position.get("size", 0) * price) if price else 0.0
+        size = max(position.get("size", 0), 0)
+        return size * price if price else 0.0
 
     def expire_unfilled_orders(self, current_bar_id):
         q = "SELECT id, pair FROM orders WHERE status='SUBMITTED' AND bar_id != ?"
@@ -56,10 +60,28 @@ class Execution:
         return rows
 
     def place_limit(self, pair: str, side: str, price: float, size: float = None, bar_time=None, bar_id=None):
-        order_size = size if size is not None else self._calc_size(price)
+        side = side.upper()
+        position = self.db.get_position(pair)
+        has_long = position is not None and position.get("side") == "LONG"
+        position_size = position.get("size", 0) if position else 0
+
+        if side == "BUY" and not has_long:
+            order_size = size if size is not None else self._calc_size(price)
+        elif side == "BUY" and has_long:
+            # Pyramiding/add to existing long
+            order_size = size if size is not None else self._calc_size(price)
+        elif side == "SELL":
+            if not has_long or position_size <= 0:
+                return "SKIPPED"
+            calc_size = size if size is not None else self._calc_size(price)
+            order_size = min(calc_size, position_size)
+            if order_size <= 0:
+                return "SKIPPED"
+        else:
+            return "SKIPPED"
 
         slippage = self.cfg.TRADING_PARAMS.get("limit_slippage_pct", 0)
-        limit_price = price * (1 - slippage) if side.upper() == "BUY" else price * (1 + slippage)
+        limit_price = price * (1 - slippage) if side == "BUY" else price * (1 + slippage)
 
         def price_lookup(p):
             if p == pair:
@@ -92,7 +114,7 @@ class Execution:
 
         self.db.insert_order(
             (
-                datetime.utcnow(),
+                datetime.now(tz=self.local_tz),
                 pair,
                 side,
                 limit_price,
