@@ -40,6 +40,9 @@ def load_last_processed_bar(db: DB):
 
 
 def run():
+    interval_minutes = CFG.TRADING_PARAMS["ohlc_interval"]
+    bar_interval = pd.Timedelta(minutes=interval_minutes)
+
     last_processed_bar = load_last_processed_bar(db)
     logger.info("Starting trading loop for pairs: %s", ", ".join(CFG.PAIRS))
     while True:
@@ -52,8 +55,8 @@ def run():
 
             bar_time = df["time"].iloc[-2]
             bar_open_unix = int(bar_time.timestamp())
-            bar_id = f"{pair}-60-{bar_open_unix}"
-            next_bar_closes.append(bar_time + pd.Timedelta(hours=1))
+            bar_id = f"{pair}-{interval_minutes}-{bar_open_unix}"
+            next_bar_closes.append(bar_time + bar_interval)
 
             logger.info("Processing bar %s (open=%s)", bar_id, bar_time)
 
@@ -127,9 +130,9 @@ def run():
 
         if next_bar_closes:
             next_bar_close = min(next_bar_closes)
-            sleep_seconds = max(10, (next_bar_close - pd.Timestamp.now(tz="UTC")).total_seconds())
-            logger.info("Sleeping %.0f seconds until next bar close (%s)", sleep_seconds, next_bar_close)
-            time.sleep(sleep_seconds)
+            sleep_seconds = (next_bar_close - pd.Timestamp.now(tz="UTC")).total_seconds()
+            # Safety floor prevents non-positive sleep when clock skew makes next close appear past-due.
+            time.sleep(max(1.0, sleep_seconds))
         else:
             logger.info(
                 "No bars processed; sleeping %s seconds before retry", CFG.TRADING_PARAMS["trading_interval"]
