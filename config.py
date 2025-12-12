@@ -1,11 +1,16 @@
 """Central configuration for the Kraken trading bot."""
 import os
+from zoneinfo import ZoneInfo
 
 # Trading pairs to monitor
 PAIRS = ["XBTUSD", "ETHUSD"]
 
 # Database path
 DB_PATH = os.getenv("DB_PATH", "bot.db")
+
+# Local timezone for scheduling and timestamps
+TIMEZONE = os.getenv("TIMEZONE", "America/New_York")
+LOCAL_TZ = ZoneInfo(TIMEZONE)
 
 # Trading parameters
 TRADING_PARAMS = {

@@ -12,6 +12,7 @@ class Execution:
         self.db = db
         self.api = api
         self.cfg = cfg
+        self.local_tz = cfg.LOCAL_TZ
 
     def _latest_price(self, pair: str, fallback: float) -> float:
         row = self.db.conn.execute(
@@ -113,7 +114,7 @@ class Execution:
 
         self.db.insert_order(
             (
-                datetime.utcnow(),
+                datetime.now(tz=self.local_tz),
                 pair,
                 side,
                 limit_price,

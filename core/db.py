@@ -5,6 +5,8 @@ from typing import Optional, Tuple
 
 import config as CFG
 
+LOCAL_TZ = CFG.LOCAL_TZ
+
 
 class DB:
     def __init__(self, path: Optional[str] = None):
@@ -155,7 +157,7 @@ class DB:
         side = side if side == "LONG" else None
         size = size if side == "LONG" and size > 0 else 0
         avg_price = avg_price if side == "LONG" else None
-        ts = datetime.utcnow().isoformat()
+        ts = datetime.now(tz=LOCAL_TZ).isoformat()
         self.conn.execute(
             """
             INSERT INTO positions (pair, side, size, avg_price, updated_at)
