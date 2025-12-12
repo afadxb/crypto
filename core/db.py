@@ -58,7 +58,7 @@ class DB:
             """
         CREATE TABLE IF NOT EXISTS positions (
             pair TEXT PRIMARY KEY,
-            side TEXT,
+            side TEXT CHECK (side IN ('LONG') OR side IS NULL),
             size REAL,
             avg_price REAL,
             updated_at TEXT
@@ -78,6 +78,11 @@ class DB:
             except sqlite3.OperationalError:
                 # Column already exists
                 pass
+
+        # Normalize any legacy short data to long-or-flat only
+        c.execute(
+            "UPDATE positions SET side=NULL, size=0, avg_price=NULL WHERE side IS NOT NULL AND side != 'LONG'"
+        )
 
         c.execute(
             """
@@ -142,9 +147,14 @@ class DB:
         row = self.conn.execute(q, (pair,)).fetchone()
         if not row:
             return None
-        return {"side": row[0], "size": row[1], "avg_price": row[2]}
+        side = row[0] if row[0] == "LONG" else None
+        size = max(row[1], 0)
+        return {"side": side, "size": size, "avg_price": row[2] if side else None}
 
-    def upsert_position(self, pair: str, side: str, size: float, avg_price: float):
+    def upsert_position(self, pair: str, side: Optional[str], size: float, avg_price: float):
+        side = side if side == "LONG" else None
+        size = size if side == "LONG" and size > 0 else 0
+        avg_price = avg_price if side == "LONG" else None
         ts = datetime.utcnow().isoformat()
         self.conn.execute(
             """
