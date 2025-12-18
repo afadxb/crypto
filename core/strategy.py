@@ -68,7 +68,8 @@ def analyze(df, cfg: Dict[str, Any], last_signal: Optional[str] = None) -> Dict[
         confidence = 0.4
 
     ema_separation = abs(ema_fast_val - ema_slow_val) / price if price else 0
-    if signal in {"BUY", "SELL"} and atr_pct >= 2 * cfg["atr_volatility_min_pct"] and ema_separation >= EMA_SEPARATION_THRESHOLD:
+    separation_threshold = cfg.get("ema_separation_threshold", EMA_SEPARATION_THRESHOLD)
+    if signal in {"BUY", "SELL"} and atr_pct >= 2 * cfg["atr_volatility_min_pct"] and ema_separation >= separation_threshold:
         confidence = HIGH_CONFIDENCE
 
     if signal == "BUY" and last_signal == "SELL" and ema_gap_pct < cfg.get("ema_gap_entry_pct", 0):
