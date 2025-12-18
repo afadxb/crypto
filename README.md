@@ -44,3 +44,13 @@ All signals are derived from the **previous closed candle** (`iloc[-2]`):
   - Use `POSITION_SIZE_USD`, `MAX_PAIR_EXPOSURE_USD`, and `MAX_TOTAL_EXPOSURE_USD` to scale absolute risk up or down without changing signal logic.
 
 Adjust these values in your `.env` file to suit your risk tolerance and market conditions.
+
+## Trading parameter reference
+
+- `TRADING_INTERVAL`: Sleep between cycles in seconds (default `3600`). Keep this aligned with the bar interval to avoid reprocessing the same candle too frequently.
+- `POSITION_SIZE_USD`: Target notional per new entry in USD terms. Lower this to reduce per-trade exposure; raise it to size up.
+- `OHLC_INTERVAL`: Minute interval for Kraken OHLC fetches (default `60`). Must match the timeframe you’re evaluating; changing it also changes how indicators are computed.
+- `LIMIT_SLIPPAGE_PCT`: Percentage added/subtracted from the signal price when submitting limit orders (default `0.0005`, i.e., 0.05%). Increase for more conservative fills; decrease to chase fills.
+- `MAX_PAIR_EXPOSURE_USD`: Cap on total LONG exposure per pair in USD terms. New orders that would exceed this are skipped.
+- `MAX_TOTAL_EXPOSURE_USD`: Global cap on aggregate LONG exposure across all pairs. Orders that would breach the cap are skipped.
+- 
