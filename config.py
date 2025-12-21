@@ -35,6 +35,13 @@ def _env_float(key: str, default: float) -> float:
         return default
 
 
+def _env_bool(key: str, default: bool) -> bool:
+    value = os.getenv(key)
+    if value is None:
+        return default
+    return value.strip() not in {"0", "false", "False", ""}
+
+
 # Trading pairs to monitor
 PAIRS = _env_list("PAIRS", ["XBTUSD", "ETHUSD"])
 
@@ -55,15 +62,24 @@ TRADING_PARAMS = {
     "max_total_exposure_usd": _env_float("MAX_TOTAL_EXPOSURE_USD", 5000.0),
 }
 
-# Indicator and entry/exit parameters
+# Indicator, entry/exit, and ML parameters
 INDICATORS = {
-    "ema_fast": _env_int("EMA_FAST", 9),
-    "ema_slow": _env_int("EMA_SLOW", 21),
+    "ema_fast": _env_int("EMA_FAST", 12),
+    "ema_slow": _env_int("EMA_SLOW", 26),
+    "ATR_LEN": _env_int("ATR_LEN", _env_int("ATR_PERIOD", 14)),
     "atr_period": _env_int("ATR_PERIOD", 14),
-    "atr_volatility_min_pct": _env_float("ATR_VOLATILITY_MIN_PCT", 0.003),
+    "atr_volatility_min_pct": _env_float("MIN_ATR_PCT", _env_float("ATR_VOLATILITY_MIN_PCT", 0.008)),
     "supertrend_period": _env_int("SUPERTREND_PERIOD", 10),
     "supertrend_multiplier": _env_float("SUPERTREND_MULTIPLIER", 3.0),
     "ema_gap_entry_pct": _env_float("EMA_GAP_ENTRY_PCT", 0.0015),
     "ema_gap_exit_pct": _env_float("EMA_GAP_EXIT_PCT", 0.0005),
     "ema_separation_threshold": _env_float("EMA_SEPARATION_THRESHOLD", 0.001),
+    "vol_z_win": _env_int("VOL_Z_WIN", 20),
+    "ml_enabled": _env_bool("ML_ENABLED", True),
+    "ml_proba_th": _env_float("ML_PROBA_TH", 0.60),
+    "ml_exit_proba_th": _env_float("ML_EXIT_PROBA_TH", 0.45),
+    "min_atr_pct": _env_float("MIN_ATR_PCT", 0.008),
+    "label_horizon_bars": _env_int("LABEL_HORIZON_BARS", 6),
+    "label_atr_k": _env_float("LABEL_ATR_K", 0.5),
+    "min_label_pct": _env_float("MIN_LABEL_PCT", 0.003),
 }

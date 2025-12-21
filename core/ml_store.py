@@ -1,0 +1,50 @@
+"""Lightweight loader for persisted ML models and metadata."""
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+
+from xgboost import XGBClassifier
+
+
+@dataclass
+class ModelBundle:
+    model: XGBClassifier
+    features: List[str]
+    meta: Dict
+
+
+_cache: Dict[Tuple[str, str], ModelBundle] = {}
+
+
+def load_model_bundle(pair: str, timeframe: str = "1h") -> Optional[ModelBundle]:
+    key = (pair, timeframe)
+    if key in _cache:
+        return _cache[key]
+
+    base = os.path.join("models", pair, timeframe)
+    model_path = os.path.join(base, "model.json")
+    feats_path = os.path.join(base, "features.txt")
+    meta_path = os.path.join(base, "meta.json")
+
+    if not os.path.exists(model_path) or not os.path.exists(feats_path):
+        return None
+
+    with open(feats_path, "r", encoding="utf-8") as f:
+        features = [f.strip() for f in f.read().splitlines() if f.strip()]
+    if not features:
+        return None
+
+    model = XGBClassifier()
+    model.load_model(model_path)
+
+    meta = {}
+    if os.path.exists(meta_path):
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+
+    bundle = ModelBundle(model=model, features=features, meta=meta)
+    _cache[key] = bundle
+    return bundle

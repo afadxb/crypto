@@ -27,10 +27,15 @@ class DB:
             confidence REAL,
             price REAL,
             st_dir TEXT,
+            st_value REAL,
             ema_fast REAL,
             ema_slow REAL,
             atr REAL,
             atr_pct REAL,
+            ema_gap_pct REAL,
+            ml_proba REAL,
+            ml_gate TEXT,
+            ml_reason TEXT,
             bar_time TEXT,
             bar_id TEXT
         );
@@ -74,6 +79,11 @@ class DB:
             "ALTER TABLE orders ADD COLUMN filled_at TEXT",
             "ALTER TABLE orders ADD COLUMN bar_id TEXT",
             "ALTER TABLE decisions ADD COLUMN bar_id TEXT",
+            "ALTER TABLE decisions ADD COLUMN st_value REAL",
+            "ALTER TABLE decisions ADD COLUMN ema_gap_pct REAL",
+            "ALTER TABLE decisions ADD COLUMN ml_proba REAL",
+            "ALTER TABLE decisions ADD COLUMN ml_gate TEXT",
+            "ALTER TABLE decisions ADD COLUMN ml_reason TEXT",
         ):
             try:
                 c.execute(alter)
@@ -106,9 +116,9 @@ class DB:
 
     def insert_decision(self, row: Tuple):
         query = """INSERT INTO decisions(
-            timestamp, pair, signal, confidence, price, st_dir,
-            ema_fast, ema_slow, atr, atr_pct, bar_time, bar_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+            timestamp, pair, signal, confidence, price, st_dir, st_value,
+            ema_fast, ema_slow, atr, atr_pct, ema_gap_pct, ml_proba, ml_gate, ml_reason, bar_time, bar_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         self.conn.execute(query, row)
         self.conn.commit()
 
@@ -126,9 +136,9 @@ class DB:
 
     def fetch_last_decisions(self, limit: int = 10):
         query = (
-            "SELECT timestamp, pair, signal, confidence, price, st_dir, "
-            "ema_fast, ema_slow, atr_pct, bar_time, bar_id FROM decisions "
-            "ORDER BY id DESC LIMIT ?"
+            "SELECT timestamp, pair, signal, confidence, price, st_dir, st_value, "
+            "ema_fast, ema_slow, atr_pct, ema_gap_pct, ml_proba, ml_gate, ml_reason, bar_time, bar_id "
+            "FROM decisions ORDER BY id DESC LIMIT ?"
         )
         return self.conn.execute(query, (limit,)).fetchall()
 
