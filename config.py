@@ -67,3 +67,21 @@ INDICATORS = {
     "ema_gap_exit_pct": _env_float("EMA_GAP_EXIT_PCT", 0.0005),
     "ema_separation_threshold": _env_float("EMA_SEPARATION_THRESHOLD", 0.001),
 }
+
+
+def _derive_timeframe_label(minutes: int) -> str:
+    if minutes % 60 == 0:
+        hours = minutes // 60
+        return f"{hours}h"
+    return f"{minutes}m"
+
+
+# Machine learning parameters
+ML_ENABLED = bool(int(os.getenv("ML_ENABLED", "0")))
+ML_MODEL_DIR = os.getenv("ML_MODEL_DIR", "models")
+ML_PROBA_TH = _env_float("ML_PROBA_TH", 0.55)
+ML_EXIT_PROBA_TH = _env_float("ML_EXIT_PROBA_TH", 0.45)
+ML_MIN_ATR_PCT = _env_float("ML_MIN_ATR_PCT", INDICATORS["atr_volatility_min_pct"])
+ML_TRAIN_LOOKBACK_BARS = _env_int("ML_TRAIN_LOOKBACK_BARS", 5000)
+ML_LABEL_HORIZON_BARS = _env_int("ML_LABEL_HORIZON_BARS", 3)
+ML_TIMEFRAME_LABEL = _derive_timeframe_label(TRADING_PARAMS["ohlc_interval"])

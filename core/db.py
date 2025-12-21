@@ -32,7 +32,10 @@ class DB:
             atr REAL,
             atr_pct REAL,
             bar_time TEXT,
-            bar_id TEXT
+            bar_id TEXT,
+            ml_proba REAL,
+            ml_gate INTEGER,
+            ml_reason TEXT
         );
         """
         )
@@ -74,6 +77,9 @@ class DB:
             "ALTER TABLE orders ADD COLUMN filled_at TEXT",
             "ALTER TABLE orders ADD COLUMN bar_id TEXT",
             "ALTER TABLE decisions ADD COLUMN bar_id TEXT",
+            "ALTER TABLE decisions ADD COLUMN ml_proba REAL",
+            "ALTER TABLE decisions ADD COLUMN ml_gate INTEGER",
+            "ALTER TABLE decisions ADD COLUMN ml_reason TEXT",
         ):
             try:
                 c.execute(alter)
@@ -97,6 +103,44 @@ class DB:
         """
         )
 
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS st_param_recommendations (
+            symbol TEXT,
+            timeframe TEXT,
+            atr_len INTEGER,
+            mult REAL,
+            score REAL,
+            median_e REAL,
+            median_mdd REAL,
+            median_flip_rate REAL,
+            fold_count INTEGER,
+            as_of TEXT,
+            run_id TEXT,
+            cost_bps REAL,
+            notes TEXT,
+            PRIMARY KEY(symbol, timeframe, run_id)
+        );
+        """
+        )
+
+        c.execute(
+            """
+        CREATE TABLE IF NOT EXISTS model_registry (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pair TEXT,
+            timeframe TEXT,
+            model_version TEXT,
+            trained_at_utc TEXT,
+            train_start TEXT,
+            train_end TEXT,
+            features_checksum TEXT,
+            features_count INTEGER,
+            meta_json TEXT
+        );
+        """
+        )
+
         c.execute("CREATE INDEX IF NOT EXISTS idx_decisions_pair_bar ON decisions(pair, bar_id);")
         c.execute("CREATE INDEX IF NOT EXISTS idx_orders_pair_bar ON orders(pair, bar_id);")
         c.execute("CREATE INDEX IF NOT EXISTS idx_decisions_time ON decisions(timestamp);")
@@ -107,8 +151,8 @@ class DB:
     def insert_decision(self, row: Tuple):
         query = """INSERT INTO decisions(
             timestamp, pair, signal, confidence, price, st_dir,
-            ema_fast, ema_slow, atr, atr_pct, bar_time, bar_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+            ema_fast, ema_slow, atr, atr_pct, bar_time, bar_id, ml_proba, ml_gate, ml_reason
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         self.conn.execute(query, row)
         self.conn.commit()
 

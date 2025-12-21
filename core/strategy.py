@@ -1,7 +1,9 @@
 """Pure strategy logic for the Kraken bot."""
 from typing import Any, Dict, Optional
 
+import config as CFG
 from .indicators import ema, atr_wilder, supertrend
+from .ml_inference import infer_signal
 
 
 EMA_SEPARATION_THRESHOLD = 0.001  # 0.1%
@@ -10,7 +12,7 @@ BASE_CONFIDENCE = 0.6
 HIGH_CONFIDENCE = 0.8
 
 
-def analyze(df, cfg: Dict[str, Any], last_signal: Optional[str] = None) -> Dict[str, Any]:
+def analyze(df, cfg: Dict[str, Any], last_signal: Optional[str] = None, pair: Optional[str] = None) -> Dict[str, Any]:
     """Analyze market data and return a trading decision.
 
     Notes
@@ -48,7 +50,8 @@ def analyze(df, cfg: Dict[str, Any], last_signal: Optional[str] = None) -> Dict[
     }
 
     # Volatility filter
-    if atr_pct < cfg["atr_volatility_min_pct"]:
+    volatility_floor = max(cfg["atr_volatility_min_pct"], CFG.ML_MIN_ATR_PCT)
+    if atr_pct < volatility_floor:
         result.update({"signal": "HOLD", "confidence": LOW_CONFIDENCE})
         return result
 
@@ -80,4 +83,27 @@ def analyze(df, cfg: Dict[str, Any], last_signal: Optional[str] = None) -> Dict[
         confidence = min(confidence, 0.4)
 
     result.update({"signal": signal, "confidence": confidence, "ema_gap_pct": ema_gap_pct})
+
+    ml_fields = {"ml_proba": None, "ml_gate": False, "ml_reason": "disabled"}
+    if CFG.ML_ENABLED and pair:
+        ml_fields = infer_signal(df, pair, cfg)
+        result.update(ml_fields)
+
+        if signal == "BUY":
+            if not ml_fields.get("ml_gate"):
+                result["signal"] = "HOLD"
+                result["confidence"] = min(confidence, 0.4)
+            else:
+                result["confidence"] = max(confidence, ml_fields.get("ml_confidence", confidence))
+        elif last_signal == "BUY" and signal == "HOLD":
+            exit_th = CFG.ML_EXIT_PROBA_TH
+            proba = ml_fields.get("ml_proba")
+            if exit_th is not None and proba is not None:
+                if proba <= exit_th or st_dir == "bear":
+                    result["signal"] = "SELL"
+                    result["confidence"] = max(confidence, ml_fields.get("ml_confidence", confidence))
+
+    else:
+        result.update(ml_fields)
+
     return result

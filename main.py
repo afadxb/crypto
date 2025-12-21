@@ -67,18 +67,23 @@ def run():
                 continue
 
             last_sig = db.last_signal(pair)
-            result = analyze(df, CFG.INDICATORS, last_sig)
+            result = analyze(df, CFG.INDICATORS, last_sig, pair=pair)
 
             sig = result["signal"]
             conf = result.get("confidence", 0)
             price = result.get("price")
 
+            atr_pct_val = result.get("atr_pct")
+            atr_str = f"{atr_pct_val:.4f}" if atr_pct_val is not None else "n/a"
+            indicator_info = f"st={result.get('st_dir')} atr_pct={atr_str} ml_proba={result.get('ml_proba')} ml_gate={result.get('ml_gate')}"
+
             logger.info(
-                "Signal for %s -> %s (confidence=%.2f, price=%s)",
+                "Signal for %s -> %s (confidence=%.2f, price=%s, %s)",
                 pair,
                 sig,
                 conf,
                 f"{price:.2f}" if price else "N/A",
+                indicator_info,
             )
 
             expired = execu.expire_unfilled_orders(str(bar_id))
@@ -99,6 +104,9 @@ def run():
                     result.get("atr_pct"),
                     str(bar_time_local),
                     str(bar_id),
+                    result.get("ml_proba"),
+                    int(result.get("ml_gate")) if result.get("ml_gate") is not None else None,
+                    result.get("ml_reason"),
                 )
             )
 

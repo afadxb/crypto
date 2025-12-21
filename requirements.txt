@@ -3,3 +3,6 @@ pandas
 python-dotenv
 requests
 tabulate
+optuna
+xgboost
+scikit-learn
