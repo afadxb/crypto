@@ -60,7 +60,7 @@ def run():
             bar_id = f"{pair}-{interval_minutes}-{bar_open_unix}"
             next_bar_closes.append(bar_time + bar_interval)
 
-            logger.info("Processing bar %s (open=%s)", bar_id, bar_time)
+            #logger.info("Processing bar %s (open=%s)", bar_id, bar_time)
 
             if last_processed_bar.get(pair) == bar_id:
                 logger.debug("Already processed bar %s; skipping", bar_id)
