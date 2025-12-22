@@ -60,7 +60,7 @@ def run():
             bar_id = f"{pair}-{interval_minutes}-{bar_open_unix}"
             next_bar_closes.append(bar_time + bar_interval)
 
-            logger.info("Processing bar %s (open=%s)", bar_id, bar_time)
+            #logger.info("Processing bar %s (open=%s)", bar_id, bar_time)
 
             if last_processed_bar.get(pair) == bar_id:
                 logger.debug("Already processed bar %s; skipping", bar_id)
@@ -72,13 +72,33 @@ def run():
             sig = result["signal"]
             conf = result.get("confidence", 0)
             price = result.get("price")
+            reason = result.get("reason", "")
+
+            def _fmt(val, pattern):
+                try:
+                    return pattern.format(val)
+                except (TypeError, ValueError):
+                    return "N/A"
+
+            indicator_info = ", ".join(
+                [
+                    f"price={_fmt(price, '{:.2f}')}",
+                    f"ema_fast={_fmt(result.get('ema_fast'), '{:.2f}')}",
+                    f"ema_slow={_fmt(result.get('ema_slow'), '{:.2f}')}",
+                    f"ema_gap={_fmt(result.get('ema_gap_pct'), '{:.2%}')}",
+                    f"atr={_fmt(result.get('atr'), '{:.4f}')}",
+                    f"atr_pct={_fmt(result.get('atr_pct'), '{:.2%}')}",
+                    f"supertrend={result.get('st_dir', '?')}@{_fmt(result.get('st_value'), '{:.2f}')}",
+                ]
+            )
 
             logger.info(
-                "Signal for %s -> %s (confidence=%.2f, price=%s)",
+                "Signal for %s -> %s (confidence=%.2f) | %s | reason: %s",
                 pair,
                 sig,
                 conf,
-                f"{price:.2f}" if price else "N/A",
+                indicator_info,
+                reason or "n/a",
             )
 
             expired = execu.expire_unfilled_orders(str(bar_id))
@@ -134,7 +154,7 @@ def run():
             next_bar_close = min(next_bar_closes).tz_convert(LOCAL_TZ)
             sleep_seconds = (next_bar_close - pd.Timestamp.now(tz=LOCAL_TZ)).total_seconds()
             # Safety floor prevents non-positive sleep when clock skew makes next close appear past-due.
-            time.sleep(max(1.0, sleep_seconds))
+            time.sleep(max(60.0, sleep_seconds))
         else:
             logger.info(
                 "No bars processed; sleeping %s seconds before retry", CFG.TRADING_PARAMS["trading_interval"]

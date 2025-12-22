@@ -18,7 +18,15 @@ def analyze(df, cfg: Dict[str, Any], last_signal: Optional[str] = None) -> Dict[
     Uses the second-to-last (closed) candle for all decisions.
     """
     if len(df) < 120:
-        return {"signal": "HOLD", "confidence": 0.0}
+        price = df["close"].iloc[-1] if not df.empty else None
+        bar_time = df["time"].iloc[-1] if not df.empty else None
+        return {
+            "signal": "HOLD",
+            "confidence": 0.0,
+            "price": price,
+            "bar_time": bar_time,
+            "reason": f"Need at least 120 candles, have {len(df)}",
+        }
 
     decision_idx = -2
     price = df["close"].iloc[decision_idx]
@@ -49,7 +57,16 @@ def analyze(df, cfg: Dict[str, Any], last_signal: Optional[str] = None) -> Dict[
 
     # Volatility filter
     if atr_pct < cfg["atr_volatility_min_pct"]:
-        result.update({"signal": "HOLD", "confidence": LOW_CONFIDENCE})
+        result.update(
+            {
+                "signal": "HOLD",
+                "confidence": LOW_CONFIDENCE,
+                "reason": (
+                    f"ATR pct {atr_pct:.4f} below min {cfg['atr_volatility_min_pct']:.4f}; "
+                    "volatility filter holding out"
+                ),
+            }
+        )
         return result
 
     ema_gap_pct = abs(ema_fast_val - ema_slow_val) / price if price else 0
@@ -60,24 +77,40 @@ def analyze(df, cfg: Dict[str, Any], last_signal: Optional[str] = None) -> Dict[
     if is_bullish:
         signal = "BUY"
         confidence = BASE_CONFIDENCE
+        reason = "Bullish agreement: price above Supertrend and fast EMA above slow EMA"
     elif is_bearish:
         signal = "SELL"
         confidence = BASE_CONFIDENCE
+        reason = "Bearish agreement: price below Supertrend and fast EMA below slow EMA"
     else:
         signal = "HOLD"
         confidence = 0.4
+        reason = "Mixed signals between Supertrend and EMAs; staying flat"
 
     ema_separation = abs(ema_fast_val - ema_slow_val) / price if price else 0
     separation_threshold = cfg.get("ema_separation_threshold", EMA_SEPARATION_THRESHOLD)
-    if signal in {"BUY", "SELL"} and atr_pct >= 2 * cfg["atr_volatility_min_pct"] and ema_separation >= separation_threshold:
+    if (
+        signal in {"BUY", "SELL"}
+        and atr_pct >= 2 * cfg["atr_volatility_min_pct"]
+        and ema_separation >= separation_threshold
+    ):
         confidence = HIGH_CONFIDENCE
+        reason += " | High confidence: strong volatility and EMA separation"
 
     if signal == "BUY" and last_signal == "SELL" and ema_gap_pct < cfg.get("ema_gap_entry_pct", 0):
         signal = "HOLD"
         confidence = min(confidence, 0.4)
+        reason = (
+            f"Skipping reversal: last signal SELL and EMA gap {ema_gap_pct:.4%} "
+            f"below entry threshold {cfg.get('ema_gap_entry_pct', 0):.4%}"
+        )
     elif signal == "SELL" and last_signal == "BUY" and ema_gap_pct < cfg.get("ema_gap_entry_pct", 0):
         signal = "HOLD"
         confidence = min(confidence, 0.4)
+        reason = (
+            f"Skipping reversal: last signal BUY and EMA gap {ema_gap_pct:.4%} "
+            f"below entry threshold {cfg.get('ema_gap_entry_pct', 0):.4%}"
+        )
 
-    result.update({"signal": signal, "confidence": confidence, "ema_gap_pct": ema_gap_pct})
+    result.update({"signal": signal, "confidence": confidence, "ema_gap_pct": ema_gap_pct, "reason": reason})
     return result
