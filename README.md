@@ -45,6 +45,17 @@ All signals are derived from the **previous closed candle** (`iloc[-2]`):
 
 Adjust these values in your `.env` file to suit your risk tolerance and market conditions.
 
+## Historical backfill and training
+
+Kraken's REST OHLC endpoint only returns the most recent ~720 candles, so long-range training relies on the downloadable trade ZIPs Kraken publishes. Use `import_trades.py` to backfill SQLite with hourly OHLCV derived from those time-and-sales files:
+
+```bash
+python import_trades.py /path/to/kraken-trades.zip --pair XBTUSD
+python import_trades.py /path/to/kraken-ethusd.zip --pair ETHUSD
+```
+
+The importer streams each CSV (or ZIP member) in chunks, aggregates to 1h candles, and upserts into the shared SQLite DB using primary keys `(exchange, pair, timeframe, ts)` to stay idempotent. Training then loads the most recent `TRAIN_LOOKBACK_BARS` (default 8000) from SQLite rather than the Kraken OHLC endpoint, while the live bot still polls the API for the freshest bars.
+
 ## Trading parameter reference
 
 - `TRADING_INTERVAL`: Sleep between cycles in seconds (default `3600`). Keep this aligned with the bar interval to avoid reprocessing the same candle too frequently.
