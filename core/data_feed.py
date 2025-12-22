@@ -9,7 +9,8 @@ from krakenex import API
 from .cache import MarketCache
 
 CACHE_MAX_AGE = 300  # seconds; refresh more often than the 1h bar to capture new closes
-MIN_CANDLES = 200
+# Ensure a long enough history for training; 5000 1h bars ~= 7 months
+MIN_CANDLES = 5000
 
 
 class DataFeed:

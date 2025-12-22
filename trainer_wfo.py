@@ -70,11 +70,29 @@ def train_pair(pair: str) -> dict:
     if len(raw) < 200:
         raise RuntimeError(f"Not enough data to train model for {pair}")
 
+    raw_bars = len(raw)
     ohlc = _prepare_ohlc(raw)
     feature_df = build_feature_frame(ohlc, CFG.INDICATORS, pair=pair, timeframe=TIMEFRAME_LABEL)
+    after_indicators = len(feature_df)
     feature_df = feature_df.iloc[:-1]  # drop potentially forming bar
     feature_df.dropna(inplace=True)
+    after_dropna = len(feature_df)
     labeled = _label_frame(feature_df)
+    after_label_trim = len(labeled)
+    final_samples = len(labeled)
+
+    print(
+        json.dumps(
+            {
+                "pair": pair,
+                "raw_bars": raw_bars,
+                "after_indicators": after_indicators,
+                "after_dropna": after_dropna,
+                "after_label_trim": after_label_trim,
+                "final_samples": final_samples,
+            }
+        )
+    )
 
     X = labeled[FEATURE_COLUMNS]
     y = labeled["label"]
