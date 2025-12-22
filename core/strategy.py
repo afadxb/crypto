@@ -82,7 +82,7 @@ def analyze(
         "ema_gap_pct": ema_gap_pct_signed,
     }
 
-    if atr_pct < cfg.get("min_atr_pct", cfg.get("atr_volatility_min_pct", 0.0)):
+    if atr_pct < cfg.get("min_atr_pct", 0.0):
         result.update({"signal": "HOLD", "confidence": LOW_CONFIDENCE, "ml_gate": "vol_filter"})
         return result
 
