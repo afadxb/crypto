@@ -49,6 +49,10 @@ def _train_model(X: pd.DataFrame, y: pd.Series) -> XGBClassifier:
         objective="binary:logistic",
         eval_metric="logloss",
     )
+    # Newer xgboost versions dropped the sklearn mixins that set `_estimator_type`,
+    # so ensure it's present to allow saving through the sklearn wrapper API.
+    if not hasattr(model, "_estimator_type"):
+        model._estimator_type = "classifier"
     model.fit(X, y, verbose=False)
     return model
 
@@ -66,14 +70,37 @@ def train_pair(pair: str) -> dict:
     if len(raw) < 200:
         raise RuntimeError(f"Not enough data to train model for {pair}")
 
+    raw_bars = len(raw)
     ohlc = _prepare_ohlc(raw)
     feature_df = build_feature_frame(ohlc, CFG.INDICATORS, pair=pair, timeframe=TIMEFRAME_LABEL)
+    after_indicators = len(feature_df)
     feature_df = feature_df.iloc[:-1]  # drop potentially forming bar
     feature_df.dropna(inplace=True)
+    after_dropna = len(feature_df)
     labeled = _label_frame(feature_df)
+    after_label_trim = len(labeled)
+    final_samples = len(labeled)
+
+    print(
+        json.dumps(
+            {
+                "pair": pair,
+                "raw_bars": raw_bars,
+                "after_indicators": after_indicators,
+                "after_dropna": after_dropna,
+                "after_label_trim": after_label_trim,
+                "final_samples": final_samples,
+            }
+        )
+    )
 
     X = labeled[FEATURE_COLUMNS]
     y = labeled["label"]
+
+    pos = int(y.sum())
+    neg = int(len(y) - pos)
+    pos_rate = float(pos / len(y)) if len(y) else 0.0
+    print(json.dumps({"pair": pair, "pos": pos, "neg": neg, "pos_rate": pos_rate}))
 
     model = _train_model(X, y)
 
@@ -100,6 +127,7 @@ def train_pair(pair: str) -> dict:
         "features_checksum": features_checksum(FEATURE_COLUMNS),
         "features": FEATURE_COLUMNS,
         "samples": len(labeled),
+        "class_balance": {"pos": pos, "neg": neg, "pos_rate": pos_rate},
     }
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 

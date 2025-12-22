@@ -80,6 +80,6 @@ INDICATORS = {
     "ml_exit_proba_th": _env_float("ML_EXIT_PROBA_TH", 0.45),
     "min_atr_pct": _env_float("MIN_ATR_PCT", 0.008),
     "label_horizon_bars": _env_int("LABEL_HORIZON_BARS", 6),
-    "label_atr_k": _env_float("LABEL_ATR_K", 0.5),
-    "min_label_pct": _env_float("MIN_LABEL_PCT", 0.003),
+    "label_atr_k": _env_float("LABEL_ATR_K", 0.4),
+    "min_label_pct": _env_float("MIN_LABEL_PCT", 0.0025),
 }
