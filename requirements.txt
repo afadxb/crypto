@@ -3,3 +3,7 @@ pandas
 python-dotenv
 requests
 tabulate
+xgboost
+scikit-learn
+numpy
+pytest

@@ -67,7 +67,8 @@ def run():
                 continue
 
             last_sig = db.last_signal(pair)
-            result = analyze(df, CFG.INDICATORS, last_sig)
+            position = db.get_position(pair)
+            result = analyze(pair, df, CFG.INDICATORS, last_sig, position)
 
             sig = result["signal"]
             conf = result.get("confidence", 0)
@@ -97,8 +98,7 @@ def run():
                 pair,
                 sig,
                 conf,
-                indicator_info,
-                reason or "n/a",
+                f"{price:.2f}" if price else "N/A",
             )
 
             expired = execu.expire_unfilled_orders(str(bar_id))
@@ -113,10 +113,15 @@ def run():
                     conf,
                     price,
                     result.get("st_dir"),
+                    result.get("st_value"),
                     result.get("ema_fast"),
                     result.get("ema_slow"),
                     result.get("atr"),
                     result.get("atr_pct"),
+                    result.get("ema_gap_pct"),
+                    result.get("ml_proba"),
+                    result.get("ml_gate"),
+                    result.get("ml_reason"),
                     str(bar_time_local),
                     str(bar_id),
                 )
