@@ -1,4 +1,4 @@
-"""Main loop for Kraken trading bot."""
+""" Main loop for Kraken trading bot."""
 import logging
 import os
 import time
