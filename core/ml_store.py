@@ -38,6 +38,13 @@ def load_model_bundle(pair: str, timeframe: str = "1h") -> Optional[ModelBundle]
         return None
 
     model = XGBClassifier()
+    # xgboost>=2.1 requires the sklearn wrapper to have `_estimator_type` set
+    # before calling `load_model`, otherwise it raises a TypeError when reading
+    # the saved booster. Explicitly set it to keep loading models compatible
+    # across library versions.
+    if not getattr(model, "_estimator_type", None):
+        model._estimator_type = "classifier"
+
     model.load_model(model_path)
 
     meta = {}
