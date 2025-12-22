@@ -97,6 +97,11 @@ def train_pair(pair: str) -> dict:
     X = labeled[FEATURE_COLUMNS]
     y = labeled["label"]
 
+    pos = int(y.sum())
+    neg = int(len(y) - pos)
+    pos_rate = float(pos / len(y)) if len(y) else 0.0
+    print(json.dumps({"pair": pair, "pos": pos, "neg": neg, "pos_rate": pos_rate}))
+
     model = _train_model(X, y)
 
     model_path, feats_path, meta_path = _artifact_paths(pair)
@@ -122,6 +127,7 @@ def train_pair(pair: str) -> dict:
         "features_checksum": features_checksum(FEATURE_COLUMNS),
         "features": FEATURE_COLUMNS,
         "samples": len(labeled),
+        "class_balance": {"pos": pos, "neg": neg, "pos_rate": pos_rate},
     }
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
