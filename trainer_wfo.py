@@ -13,6 +13,7 @@ from xgboost import XGBClassifier
 
 import config as CFG
 from core.data_feed import DataFeed
+from core.ohlcv_store import OHLCVStore
 from features import FEATURE_COLUMNS, build_feature_frame, features_checksum
 
 load_dotenv()
@@ -64,14 +65,58 @@ def _prepare_ohlc(raw_df: pd.DataFrame) -> pd.DataFrame:
     return ohlc
 
 
-def train_pair(pair: str) -> dict:
-    feed = DataFeed(os.getenv("KRAKEN_API_KEY", ""), os.getenv("KRAKEN_API_SECRET", ""), CFG.TRADING_PARAMS["ohlc_interval"])
-    raw = feed.fetch_ohlc(pair, interval=CFG.TRADING_PARAMS["ohlc_interval"])
-    if len(raw) < 200:
-        raise RuntimeError(f"Not enough data to train model for {pair}")
+def _df_from_store(rows: list[dict]) -> pd.DataFrame:
+    df = pd.DataFrame(rows)
+    df = df.sort_values("ts")
+    df["time"] = pd.to_datetime(df["ts"], unit="s", utc=True)
+    return _prepare_ohlc(df)
 
-    raw_bars = len(raw)
-    ohlc = _prepare_ohlc(raw)
+
+def _refresh_recent_from_api(pair: str, store: OHLCVStore) -> None:
+    """Optionally refresh the last ~720 bars from Kraken for recency."""
+
+    feed = DataFeed(
+        os.getenv("KRAKEN_API_KEY", ""), os.getenv("KRAKEN_API_SECRET", ""), CFG.TRADING_PARAMS["ohlc_interval"]
+    )
+    recent = feed.fetch_ohlc(pair, interval=CFG.TRADING_PARAMS["ohlc_interval"])
+    if recent.empty:
+        return
+
+    payload = []
+    for _, row in recent.iterrows():
+        ts = int(pd.to_datetime(row["time"]).timestamp())
+        payload.append(
+            {
+                "pair": pair,
+                "timeframe": TIMEFRAME_LABEL,
+                "ts": ts,
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": float(row["volume"]),
+                "vwap": float(row.get("vwap", 0)) if "vwap" in row else None,
+                "trades": int(row.get("count", 0)) if "count" in row else None,
+            }
+        )
+
+    store.upsert_ohlcv(payload, pair=pair, timeframe=TIMEFRAME_LABEL)
+
+
+def _load_training_ohlc(pair: str, store: OHLCVStore) -> pd.DataFrame:
+    _refresh_recent_from_api(pair, store)
+    rows = store.fetch_ohlcv(pair, timeframe=TIMEFRAME_LABEL, limit=CFG.TRAIN_LOOKBACK_BARS)
+    if not rows:
+        raise RuntimeError(f"No OHLCV history found in SQLite for {pair}")
+    return _df_from_store(rows)
+
+
+def train_pair(pair: str) -> dict:
+    store = OHLCVStore()
+    ohlc = _load_training_ohlc(pair, store)
+    raw_bars = len(ohlc)
+    if raw_bars < 200:
+        raise RuntimeError(f"Not enough data to train model for {pair}")
     feature_df = build_feature_frame(ohlc, CFG.INDICATORS, pair=pair, timeframe=TIMEFRAME_LABEL)
     after_indicators = len(feature_df)
     feature_df = feature_df.iloc[:-1]  # drop potentially forming bar

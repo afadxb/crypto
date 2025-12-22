@@ -62,6 +62,9 @@ TRADING_PARAMS = {
     "max_total_exposure_usd": _env_float("MAX_TOTAL_EXPOSURE_USD", 5000.0),
 }
 
+# Training parameters
+TRAIN_LOOKBACK_BARS = _env_int("TRAIN_LOOKBACK_BARS", 8000)
+
 # Indicator, entry/exit, and ML parameters
 INDICATORS = {
     "ema_fast": _env_int("EMA_FAST", 12),
