@@ -80,13 +80,33 @@ def run():
             ml_str = f"{ml_proba:.3f}" if ml_proba is not None else "N/A"
             gate = result.get("ml_gate") or "N/A"
 
+            atr_pct = result.get("atr_pct")
+            atr_min = CFG.INDICATORS.get(
+                "min_atr_pct", CFG.INDICATORS.get("atr_volatility_min_pct", 0.0)
+            )
+            ema_gap_pct = result.get("ema_gap_pct")
+            ema_entry_min = CFG.INDICATORS.get("ema_gap_entry_pct", 0.0)
+            st_dir = result.get("st_dir") or "N/A"
+
             logger.info(
-                "Signal for %(pair)s -> %(sig)s (conf=%(conf).2f, price=%(price)s, ml=%(ml)s, gate=%(gate)s, reason=%(reason)s)",
+                (
+                    "Signal for %(pair)s -> %(sig)s (conf=%(conf).2f, price=%(price)s) "
+                    "atr_pct=%(atr_pct)s min=%(atr_min)s "
+                    "ema_gap_pct=%(ema_gap_pct)s entry_min=%(ema_entry_min)s "
+                    "st_dir=%(st_dir)s ml=%(ml)s gate=%(gate)s reason=%(reason)s"
+                ),
                 {
                     "pair": pair,
                     "sig": sig,
                     "conf": conf,
                     "price": price_str,
+                    "atr_pct": f"{atr_pct * 100:.2f}%" if atr_pct is not None else "N/A",
+                    "atr_min": f"{atr_min * 100:.2f}%",
+                    "ema_gap_pct": f"{abs(ema_gap_pct) * 100:.2f}%"
+                    if ema_gap_pct is not None
+                    else "N/A",
+                    "ema_entry_min": f"{ema_entry_min * 100:.2f}%",
+                    "st_dir": st_dir,
                     "ml": ml_str,
                     "gate": gate,
                     "reason": reason,
