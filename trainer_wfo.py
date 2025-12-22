@@ -49,6 +49,10 @@ def _train_model(X: pd.DataFrame, y: pd.Series) -> XGBClassifier:
         objective="binary:logistic",
         eval_metric="logloss",
     )
+    # Newer xgboost versions dropped the sklearn mixins that set `_estimator_type`,
+    # so ensure it's present to allow saving through the sklearn wrapper API.
+    if not hasattr(model, "_estimator_type"):
+        model._estimator_type = "classifier"
     model.fit(X, y, verbose=False)
     return model
 
