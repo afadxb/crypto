@@ -76,15 +76,21 @@ def run():
 
             ml_proba = result.get("ml_proba")
             reason = result.get("ml_reason") or "N/A"
+            price_str = f"{price:.2f}" if price else "N/A"
+            ml_str = f"{ml_proba:.3f}" if ml_proba is not None else "N/A"
+            gate = result.get("ml_gate") or "N/A"
+
             logger.info(
-                "Signal for %s -> %s (conf=%.2f, price=%s, ml=%.3f, gate=%s, reason=%s)",
-                pair,
-                sig,
-                conf,
-                f"{price:.2f}" if price else "N/A",
-                ml_proba if ml_proba is not None else -1,
-                result.get("ml_gate"),
-                reason,
+                "Signal for %(pair)s -> %(sig)s (conf=%(conf).2f, price=%(price)s, ml=%(ml)s, gate=%(gate)s, reason=%(reason)s)",
+                {
+                    "pair": pair,
+                    "sig": sig,
+                    "conf": conf,
+                    "price": price_str,
+                    "ml": ml_str,
+                    "gate": gate,
+                    "reason": reason,
+                },
             )
 
             expired = execu.expire_unfilled_orders(str(bar_id))
