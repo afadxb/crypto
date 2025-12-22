@@ -21,7 +21,7 @@ Indicators:
 - 'ema_fast': 9
 - 'ema_slow': 21
 - 'atr_period': 14
-- 'atr_volatility_min_pct': 0.003   # 0.3% of price as a minimum ATR filter
+- 'min_atr_pct': 0.003   # 0.3% of price as a minimum ATR filter
 - 'supertrend_period': 10
 - 'supertrend_multiplier': 3.0
 
@@ -59,26 +59,26 @@ Use the second-to-last candle (index -2) for signals:
 - ema_slow_val = ema_slow_series.iloc[-2]
 - atr_val = atr_series.iloc[-2]
 
-Compute atr_pct = atr_val / price and compare with atr_volatility_min_pct from config.
+Compute atr_pct = atr_val / price and compare with min_atr_pct from config.
 
 Conditions:
 BUY signal:
 - st_dir is bullish (e.g., +1) AND
 - price > st_value AND
 - ema_fast_val > ema_slow_val AND
-- atr_pct >= atr_volatility_min_pct
+- atr_pct >= min_atr_pct
 
 SELL signal:
 - st_dir is bearish (e.g., -1) AND
 - price < st_value AND
 - ema_fast_val < ema_slow_val AND
-- atr_pct >= atr_volatility_min_pct
+- atr_pct >= min_atr_pct
 If conditions are not met: signal = "HOLD".
 
 Confidence:
 Base confidence 0.6 when all conditions met.
 You may increase to ~0.8 if:
-- ATR is significantly higher than the minimum (e.g., atr_pct >= 2 * atr_volatility_min_pct)
+- ATR is significantly higher than the minimum (e.g., atr_pct >= 2 * min_atr_pct)
 - AND EMAs are strongly separated (abs(ema_fast_val - ema_slow_val) / price above some small threshold).
   
 Prefer small, clear helper methods over long inline logic blocks.

@@ -81,9 +81,7 @@ def run():
             gate = result.get("ml_gate") or "N/A"
 
             atr_pct = result.get("atr_pct")
-            atr_min = CFG.INDICATORS.get(
-                "min_atr_pct", CFG.INDICATORS.get("atr_volatility_min_pct", 0.0)
-            )
+            atr_min = CFG.INDICATORS.get("min_atr_pct", 0.0)
             ema_gap_pct = result.get("ema_gap_pct")
             ema_entry_min = CFG.INDICATORS.get("ema_gap_entry_pct", 0.0)
             st_dir = result.get("st_dir") or "N/A"
