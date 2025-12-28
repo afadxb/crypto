@@ -1,9 +1,11 @@
 """Data feed module for fetching and caching OHLC data from Kraken."""
+import logging
 import time
 from datetime import datetime
 from typing import Optional
 
 import pandas as pd
+import requests
 from krakenex import API
 
 from .cache import MarketCache
@@ -11,6 +13,7 @@ from .cache import MarketCache
 CACHE_MAX_AGE = 300  # seconds; refresh more often than the 1h bar to capture new closes
 # Ensure a long enough history for training; 5000 1h bars ~= 7 months
 MIN_CANDLES = 5000
+logger = logging.getLogger(__name__)
 
 
 class DataFeed:
@@ -29,6 +32,19 @@ class DataFeed:
         last_fetch = self.cache.last_fetch.get(pair, 0)
         return (time.time() - last_fetch) < CACHE_MAX_AGE
 
+    def _fallback_to_cache(
+        self,
+        pair: str,
+        cached: Optional[pd.DataFrame],
+        message: str,
+        exc: Optional[BaseException] = None,
+    ) -> pd.DataFrame:
+        if exc:
+            logger.warning("OHLC fetch failed for %s: %s", pair, message, exc_info=exc)
+        else:
+            logger.warning("OHLC fetch failed for %s: %s", pair, message)
+        return cached if cached is not None else pd.DataFrame()
+
     def fetch_ohlc(self, pair: str, interval: Optional[int] = None) -> pd.DataFrame:
         """Fetch OHLC data for a pair, enforcing at least MIN_CANDLES history."""
         interval = interval or self.interval
@@ -46,10 +62,27 @@ class DataFeed:
             last_ts = int(cached["time"].iloc[-1].timestamp())
             since = last_ts
 
-        resp = self.api.query_public("OHLC", {"pair": pair, "interval": interval, "since": since})
+        try:
+            resp = self.api.query_public(
+                "OHLC", {"pair": pair, "interval": interval, "since": since}
+            )
+        except requests.exceptions.RequestException as exc:
+            return self._fallback_to_cache(pair, cached, "request exception", exc)
+        except Exception as exc:
+            return self._fallback_to_cache(pair, cached, "unexpected exception", exc)
 
-        key = next(k for k in resp["result"].keys() if k != "last")
-        raw = resp["result"][key]
+        if not resp:
+            return self._fallback_to_cache(pair, cached, "empty response")
+        if resp.get("error"):
+            return self._fallback_to_cache(pair, cached, f"api error: {resp['error']}")
+
+        result = resp.get("result") or {}
+        key = next((k for k in result.keys() if k != "last"), None)
+        if not key or key not in result:
+            return self._fallback_to_cache(pair, cached, "missing result payload")
+        raw = result.get(key) or []
+        if not raw:
+            return self._fallback_to_cache(pair, cached, "empty OHLC payload")
 
         df_new = pd.DataFrame(
             raw,
