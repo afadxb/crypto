@@ -29,6 +29,7 @@ WFO_VAL_SIZE = int(os.getenv("WFO_VAL_SIZE", "120"))  # bars per fold validation
 WFO_MIN_TRAIN = int(os.getenv("WFO_MIN_TRAIN", "300"))  # minimum bars before first split
 CAL_METHOD = os.getenv("CAL_METHOD", "platt").strip().lower()  # "platt" or "isotonic"
 CAL_MIN_SAMPLES = int(os.getenv("CAL_MIN_SAMPLES", "200"))
+ML_AUC_FLOOR = float(os.getenv("ML_AUC_FLOOR", "0.52"))
 
 
 def _artifact_paths(pair: str) -> Tuple[Path, Path, Path]:
@@ -307,12 +308,30 @@ def train_pair(pair: str) -> dict:
     oof_base_metrics = {}
     cal = {"method": "none"}
     oof_cal_metrics = {}
+    ml_quality: Dict[str, Any] = {
+        "enabled": False,
+        "auc_floor": float(ML_AUC_FLOOR),
+        "oof_auc": None,
+        "oof_n": 0,
+        "reason": "insufficient_oof",
+    }
 
     if valid_mask.any():
         oof_base_metrics = _metrics(y.to_numpy()[valid_mask], oof_p[valid_mask])
         cal = _fit_calibrator(oof_p[valid_mask], y.to_numpy()[valid_mask], CAL_METHOD)
         oof_p_cal = _apply_calibrator(oof_p[valid_mask], cal)
         oof_cal_metrics = _metrics(y.to_numpy()[valid_mask], oof_p_cal)
+
+        # ---- Automatic per-pair ML enable/disable based on OOF base AUC ----
+        oof_auc = float(oof_base_metrics.get("auc", float("nan")))
+        enabled = bool(np.isfinite(oof_auc) and (oof_auc >= ML_AUC_FLOOR))
+        ml_quality = {
+            "enabled": enabled,
+            "auc_floor": float(ML_AUC_FLOOR),
+            "oof_auc": None if not np.isfinite(oof_auc) else float(oof_auc),
+            "oof_n": int(valid_mask.sum()),
+            "reason": "ok" if enabled else "auc_below_floor",
+        }
 
         print(
             json.dumps(
@@ -327,6 +346,7 @@ def train_pair(pair: str) -> dict:
                         "calibration": {"method": cal.get("method", "none")},
                         "cal_metrics": oof_cal_metrics,
                     },
+                    "ml_quality": ml_quality,
                 }
             )
         )
@@ -369,6 +389,7 @@ def train_pair(pair: str) -> dict:
             "oof_cal_metrics": oof_cal_metrics,
         },
         "calibration": cal,
+        "ml_quality": ml_quality,
     }
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
