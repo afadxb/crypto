@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Tuple
 
 from xgboost import XGBClassifier
 
+from features import FEATURE_COLUMNS, features_checksum
+
 
 @dataclass
 class ModelBundle:
@@ -51,6 +53,17 @@ def load_model_bundle(pair: str, timeframe: str = "1h") -> Optional[ModelBundle]
     if os.path.exists(meta_path):
         with open(meta_path, "r", encoding="utf-8") as f:
             meta = json.load(f)
+
+    # ---- Feature alignment guard ----
+    # If training features drift from live features, fail closed (no trading on bad inputs).
+    trained_checksum = (meta or {}).get("features_checksum")
+    live_checksum = features_checksum(FEATURE_COLUMNS)
+
+    # Require both: (1) checksum match, (2) exact feature list match
+    if trained_checksum and trained_checksum != live_checksum:
+        return None
+    if features != list(FEATURE_COLUMNS):
+        return None
 
     bundle = ModelBundle(model=model, features=features, meta=meta)
     _cache[key] = bundle
