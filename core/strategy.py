@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 import pandas as pd
+import numpy as np
 
 from features import build_feature_frame, latest_closed_row
 from .ml_store import load_model_bundle
@@ -32,8 +33,35 @@ def _ml_score(row: pd.Series, pair: str, cfg: Dict[str, Any]):
 
     try:
         X = row[model_bundle.features].to_frame().T
-        proba = model_bundle.model.predict_proba(X)[0, 1]
-        return float(proba), "ok"
+        p_raw = float(model_bundle.model.predict_proba(X)[0, 1])
+
+        cal = (model_bundle.meta or {}).get("calibration") or {}
+        method = (cal.get("method") or "none").lower()
+
+        def _logit(p: float) -> float:
+            p = float(np.clip(p, 1e-6, 1 - 1e-6))
+            return float(np.log(p / (1 - p)))
+
+        def _sigmoid(z: float) -> float:
+            return float(1.0 / (1.0 + np.exp(-z)))
+
+        def _apply_cal(p: float) -> float:
+            if method in ("none", "", None):
+                return p
+            if method == "platt":
+                coef = float(cal.get("coef", 1.0))
+                intercept = float(cal.get("intercept", 0.0))
+                return _sigmoid(coef * _logit(p) + intercept)
+            if method == "isotonic":
+                x = np.array(cal.get("x", []), dtype=float)
+                y = np.array(cal.get("y", []), dtype=float)
+                if len(x) < 2 or len(y) < 2:
+                    return p
+                return float(np.interp(p, x, y, left=y[0], right=y[-1]))
+            return p
+
+        p = _apply_cal(p_raw)
+        return float(p), f"ok(cal={method}, raw={p_raw:.4f})"
     except Exception:
         return None, "inference_error"
 
