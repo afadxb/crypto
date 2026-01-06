@@ -57,6 +57,14 @@ def _ml_score(row: pd.Series, pair: str, cfg: Dict[str, Any]):
     if not model_bundle:
         return None, "missing_model"
 
+    # Per-pair quality gate written by trainer (meta.json)
+    mq = (model_bundle.meta or {}).get("ml_quality") or {}
+    if mq.get("enabled") is False:
+        auc = mq.get("oof_auc")
+        auc_str = f"{auc:.3f}" if isinstance(auc, (int, float)) else "n/a"
+        floor = mq.get("auc_floor", "n/a")
+        return None, f"ml_disabled({mq.get('reason','disabled')}, oof_auc={auc_str}, floor={floor})"
+
     try:
         X = row[model_bundle.features].to_frame().T
         p_raw = float(model_bundle.model.predict_proba(X)[0, 1])
